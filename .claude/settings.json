@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q '\"file_path\":.*agents/'; then echo '>> AGENTS_GUIDE.md reminder: ensure the agent follows the BaseAgent contract. Validate prerequisites, write to context, handle errors gracefully, return context.'; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q '\"file_path\":.*prompts/'; then echo '>> PROMPTS_GUIDE.md reminder: prompts must have Role, Task, Input, Output Format, and Rules sections.'; fi"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q 'pytest'; then echo '>> Tests ran. If all passed, consider updating LEARNINGS.md with any new concepts introduced.'; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '>> Session ended. Remember to: 1) commit your changes, 2) update LEARNINGS.md if new AI concepts were introduced, 3) run pytest tests/ before pushing.'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python main.py*)",
+      "Bash(pytest tests/*)",
+      "Bash(uvicorn api.main:app*)",
+      "Bash(pip install*)",
+      "Bash(git *)"
+    ]
+  }
+}
