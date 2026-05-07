@@ -5,18 +5,21 @@ This is the last agent in the pipeline. It has access to the full enriched
 context from all previous agents and synthesizes them into a professional
 PR description.
 
-This agent demonstrates "chained agent output" — it meaningfully uses the
-outputs of 3 other agents (ReviewAgent, ExplainerAgent, TechDebtAgent).
-
 See AGENTS_GUIDE.md for agent conventions.
 See prompts/pr_summary.md for the prompt template.
 """
 
 import json
-import anthropic
+import ollama
 
 from agents.base import BaseAgent
 from agents.context import AgentContext
+
+SYSTEM_PROMPT = (
+    "You are a senior engineer who writes clear, professional pull request "
+    "descriptions. You follow conventional commits for titles and write "
+    "descriptions that help reviewers understand what changed and why."
+)
 
 
 class PRSummaryAgent(BaseAgent):
@@ -24,17 +27,15 @@ class PRSummaryAgent(BaseAgent):
     Generates a PR title and description from the full review context.
 
     Reads from context:
-    - review_summary: what issues were found
-    - explanation: what the code does
-    - debt_score, debt_hotspots: tech debt context
+    - review_summary, explanation, debt_score, debt_hotspots, review_issues
 
     Writes to context:
     - pr_title: short, conventional commits style title
     - pr_body: full markdown PR description
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6"):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str = "llama3.1:8b"):
+        self.client = ollama.Client()
         self.model = model
         self.prompt_template = self._load_prompt("pr_summary.md")
 
@@ -61,22 +62,19 @@ class PRSummaryAgent(BaseAgent):
         prompt = prompt.replace("{{critical_count}}", str(critical))
         prompt = prompt.replace("{{high_count}}", str(high))
 
-        # 3. Call Claude API
+        # 3. Call Ollama
         try:
-            response = self.client.messages.create(
+            response = self.client.chat(
                 model=self.model,
-                max_tokens=1024,
-                temperature=0.6,  # Slightly creative — PR descriptions should read naturally
-                system=(
-                    "You are a senior engineer who writes clear, professional pull request "
-                    "descriptions. You follow conventional commits for titles and write "
-                    "descriptions that help reviewers understand what changed and why."
-                ),
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                options={"temperature": 0.6},
             )
-            raw = response.content[0].text.strip()
+            raw = response.message.content.strip()
 
-            # Strip markdown if wrapped
+            # Strip code blocks if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -93,7 +91,7 @@ class PRSummaryAgent(BaseAgent):
 
         except json.JSONDecodeError as e:
             context.errors.append(f"PRSummaryAgent: failed to parse JSON: {e}")
-        except anthropic.APIError as e:
-            context.errors.append(f"PRSummaryAgent: API error: {e}")
+        except Exception as e:
+            context.errors.append(f"PRSummaryAgent: error: {e}")
 
         return context

@@ -71,26 +71,29 @@ Why prompts live in files (`prompts/*.md`):
 - Non-engineers can read and improve them
 - Never lose a prompt when refactoring
 
-### 5. What is the Claude Messages API?
-Claude's API follows the messages format:
+### 5. What is the Ollama Chat API?
+Ollama runs LLMs locally. The Python client follows the same messages format:
 
 ```python
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=2048,
-    system="You are a code reviewer...",   # system prompt: role + rules
+import ollama
+
+client = ollama.Client()
+response = client.chat(
+    model="llama3.1:8b",
     messages=[
-        {"role": "user", "content": code}  # user message: the actual input
-    ]
+        {"role": "system", "content": "You are a code reviewer..."},  # role + rules
+        {"role": "user", "content": code}  # the actual input
+    ],
+    options={"temperature": 0.2}  # controls randomness
 )
-result = response.content[0].text  # the LLM's response
+result = response.message.content  # the LLM's response
 ```
 
 Key parameters:
-- `model` — which Claude model to use
-- `max_tokens` — max response length (1 token ≈ 4 chars)
-- `system` — sets the LLM's role and behavior
-- `temperature` — 0.0 = deterministic, 1.0 = creative (default 1.0)
+- `model` — which Ollama model to use (must be pulled first: `ollama pull llama3.1:8b`)
+- `messages` — conversation history with system + user roles
+- `options.temperature` — 0.0 = deterministic, 1.0 = creative
+- No API key needed — runs fully local
 
 ### 6. What is Temperature?
 Temperature controls how "creative" or "random" the LLM's output is.
@@ -104,7 +107,9 @@ Temperature controls how "creative" or "random" the LLM's output is.
 
 CodeCoach uses:
 - `temperature=0.2` for ReviewAgent (want consistent, structured JSON)
+- `temperature=0.3` for TestGenAgent (mostly deterministic test code)
 - `temperature=0.7` for ExplainerAgent (want natural-sounding explanations)
+- `temperature=0.6` for PRSummaryAgent (professional but readable)
 
 ---
 

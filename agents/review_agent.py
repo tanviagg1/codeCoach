@@ -10,10 +10,17 @@ See prompts/review.md for the prompt template.
 """
 
 import json
-import anthropic
+import ollama
 
 from agents.base import BaseAgent
 from agents.context import AgentContext
+
+SYSTEM_PROMPT = (
+    "You are a senior software engineer with 10 years of experience "
+    "in code review, security, and production systems. "
+    "You have reviewed thousands of pull requests. "
+    "Think step by step before producing your final JSON output."
+)
 
 
 class ReviewAgent(BaseAgent):
@@ -25,8 +32,8 @@ class ReviewAgent(BaseAgent):
     - review_summary: one-paragraph human-readable summary
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6"):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str = "llama3.1:8b"):
+        self.client = ollama.Client()
         self.model = model
         # Load prompt once at init — not on every run
         self.prompt_template = self._load_prompt("review.md")
@@ -41,24 +48,19 @@ class ReviewAgent(BaseAgent):
         prompt = prompt.replace("{{language}}", context.language)
         prompt = prompt.replace("{{filename}}", context.filename)
 
-        # 3. Call Claude API
+        # 3. Call Ollama
         try:
-            response = self.client.messages.create(
+            response = self.client.chat(
                 model=self.model,
-                max_tokens=2048,
-                temperature=0.2,  # Low temp: we want consistent, structured output
-                system=(
-                    "You are a senior software engineer with 10 years of experience "
-                    "in code review, security, and production systems. "
-                    "You have reviewed thousands of pull requests. "
-                    "Think step by step before producing your final JSON output."
-                ),
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                options={"temperature": 0.2},  # Low temp: consistent, structured output
             )
-            raw = response.content[0].text.strip()
+            raw = response.message.content.strip()
 
-            # 4. Parse the JSON response
-            # Strip markdown code blocks if the model wrapped the JSON
+            # 4. Parse JSON — strip markdown code blocks if model wrapped it
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -81,9 +83,9 @@ class ReviewAgent(BaseAgent):
 
         except json.JSONDecodeError as e:
             context.errors.append(f"ReviewAgent: failed to parse JSON response: {e}")
-            print(f"  Warning: could not parse response as JSON. Raw: {raw[:100]}")
-        except anthropic.APIError as e:
-            context.errors.append(f"ReviewAgent: API error: {e}")
-            print(f"  Warning: API error: {e}")
+            print(f"  Warning: could not parse response as JSON.")
+        except Exception as e:
+            context.errors.append(f"ReviewAgent: error: {e}")
+            print(f"  Warning: {e}")
 
         return context

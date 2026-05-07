@@ -6,11 +6,11 @@ These are Python lifecycle hooks: validation logic that runs before
 any agents execute.
 
 Usage in main.py:
-    from hooks.pre_review import validate_inputs
+    from hooks.pre_review import validate_inputs, check_ollama
     validate_inputs(code, filename)
+    check_ollama(model)
 """
 
-import os
 from pathlib import Path
 
 
@@ -20,10 +20,6 @@ def validate_inputs(code: str, filename: str) -> None:
 
     Raises ValueError with a clear message if validation fails.
     These are fatal errors — the pipeline should not start.
-
-    Args:
-        code: Source code to review
-        filename: Name of the source file
     """
     if not code or not code.strip():
         raise ValueError(
@@ -40,30 +36,39 @@ def validate_inputs(code: str, filename: str) -> None:
     if not filename:
         raise ValueError("Filename is required (used to detect language and name the report).")
 
-    # Warn about binary files
     try:
         code.encode("utf-8")
     except UnicodeEncodeError:
         raise ValueError("Code contains non-UTF-8 characters. Only text files are supported.")
 
 
-def check_api_key() -> None:
+def check_ollama(model: str = "llama3.1:8b") -> None:
     """
-    Verify the Anthropic API key is set before starting the pipeline.
+    Verify Ollama is running and the requested model is available.
 
-    Raises EnvironmentError if the key is missing.
+    Raises EnvironmentError if Ollama is not reachable or model is missing.
     """
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
+    try:
+        import ollama
+        client = ollama.Client()
+        available = [m.model for m in client.list().models]
+        if not any(model in m for m in available):
+            raise EnvironmentError(
+                f"Model '{model}' is not pulled in Ollama.\n"
+                f"Run: ollama pull {model}\n"
+                f"Available models: {available or ['(none)']}"
+            )
+    except ImportError:
         raise EnvironmentError(
-            "ANTHROPIC_API_KEY environment variable is not set.\n"
-            "Set it with: export ANTHROPIC_API_KEY=your_key_here\n"
-            "Get a key at: https://console.anthropic.com"
+            "ollama Python package not installed.\n"
+            "Run: pip install ollama"
         )
-    if not key.startswith("sk-ant-"):
+    except Exception as e:
+        if "EnvironmentError" in type(e).__name__:
+            raise
         raise EnvironmentError(
-            "ANTHROPIC_API_KEY looks invalid (should start with 'sk-ant-'). "
-            "Check your key at https://console.anthropic.com"
+            f"Cannot connect to Ollama: {e}\n"
+            "Make sure Ollama is running: ollama serve"
         )
 
 
@@ -71,11 +76,7 @@ def check_prompts_exist(agent_names: list[str]) -> None:
     """
     Verify that prompt files exist for all requested agents.
 
-    Args:
-        agent_names: List of agent names to check (e.g., ["review", "tests"])
-
-    Raises:
-        FileNotFoundError if any prompt file is missing
+    Raises FileNotFoundError if any prompt file is missing.
     """
     prompt_map = {
         "review": "prompts/review.md",

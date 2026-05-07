@@ -13,8 +13,6 @@ See ARCHITECTURE.md for full API design.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import os
-
 from agents.context import AgentContext
 from agents.pipeline import SequentialPipeline
 from agents.review_agent import ReviewAgent
@@ -39,7 +37,7 @@ class ReviewRequest(BaseModel):
     code: str
     filename: str = "unknown.py"
     agents: list[str] = ["review", "tests", "explain", "debt", "pr"]
-    model: str = "claude-sonnet-4-6"
+    model: str = "llama3.1:8b"
 
 
 class SingleAgentRequest(BaseModel):
@@ -95,12 +93,10 @@ def _build_pipeline(requested_agents: list[str], model: str) -> SequentialPipeli
 
 @app.get("/health")
 def health_check():
-    """Health check — confirms API is running and API key is configured."""
-    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    """Health check — confirms API is running and Ollama is reachable."""
     return {
         "status": "ok",
-        "api_key_configured": has_key,
-        "model": "claude-sonnet-4-6",
+        "model": "llama3.1:8b (Ollama)",
     }
 
 

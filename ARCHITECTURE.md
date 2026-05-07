@@ -38,7 +38,7 @@ Each agent:
 1. Validates prerequisites from context
 2. Loads its prompt template from `prompts/`
 3. Formats the prompt with context data
-4. Calls Claude API (via `anthropic.Anthropic`)
+4. Calls Ollama (via `ollama.Client`)
 5. Parses the response
 6. Writes results back to context
 7. Returns the enriched context

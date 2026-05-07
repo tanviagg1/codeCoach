@@ -4,17 +4,21 @@ TechDebtAgent — scores technical debt and identifies hotspot areas.
 Tech debt score: 0 (pristine) to 100 (unmaintainable).
 Debt hotspots: specific lines or sections that contribute most to debt.
 
-This agent is added in Phase 2 but stubbed here for the architecture.
-
 See AGENTS_GUIDE.md for agent conventions.
 See prompts/tech_debt.md for the prompt template.
 """
 
 import json
-import anthropic
+import ollama
 
 from agents.base import BaseAgent
 from agents.context import AgentContext
+
+SYSTEM_PROMPT = (
+    "You are a software architect who specializes in identifying and "
+    "quantifying technical debt. You score debt consistently across "
+    "many codebases. Think step by step before producing your JSON output."
+)
 
 
 class TechDebtAgent(BaseAgent):
@@ -30,8 +34,8 @@ class TechDebtAgent(BaseAgent):
     - debt_hotspots: list of {line, description, severity} dicts
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6"):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str = "llama3.1:8b"):
+        self.client = ollama.Client()
         self.model = model
         self.prompt_template = self._load_prompt("tech_debt.md")
 
@@ -53,20 +57,17 @@ class TechDebtAgent(BaseAgent):
         prompt = prompt.replace("{{language}}", context.language)
         prompt = prompt.replace("{{issues}}", issues_str)
 
-        # 4. Call Claude API
+        # 4. Call Ollama
         try:
-            response = self.client.messages.create(
+            response = self.client.chat(
                 model=self.model,
-                max_tokens=1024,
-                temperature=0.2,
-                system=(
-                    "You are a software architect who specializes in identifying and "
-                    "quantifying technical debt. You score debt consistently across "
-                    "many codebases. Think step by step before producing your JSON output."
-                ),
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                options={"temperature": 0.2},
             )
-            raw = response.content[0].text.strip()
+            raw = response.message.content.strip()
 
             # Strip code blocks if present
             if raw.startswith("```"):
@@ -92,7 +93,7 @@ class TechDebtAgent(BaseAgent):
 
         except json.JSONDecodeError as e:
             context.errors.append(f"TechDebtAgent: failed to parse JSON: {e}")
-        except anthropic.APIError as e:
-            context.errors.append(f"TechDebtAgent: API error: {e}")
+        except Exception as e:
+            context.errors.append(f"TechDebtAgent: error: {e}")
 
         return context

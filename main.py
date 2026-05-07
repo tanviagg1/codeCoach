@@ -20,7 +20,7 @@ from agents.test_gen_agent import TestGenAgent
 from agents.explainer_agent import ExplainerAgent
 from agents.tech_debt_agent import TechDebtAgent
 from agents.pr_summary_agent import PRSummaryAgent
-from hooks.pre_review import validate_inputs, check_api_key, check_prompts_exist
+from hooks.pre_review import validate_inputs, check_ollama, check_prompts_exist
 from hooks.post_review import save_outputs, log_summary
 from skills.code_parser import detect_language, truncate_code
 from skills.git_tools import read_file
@@ -65,8 +65,8 @@ Examples:
         help="Save outputs to the output/ directory"
     )
     parser.add_argument(
-        "--model", default="claude-sonnet-4-6",
-        help="Claude model to use (default: claude-sonnet-4-6)"
+        "--model", default="llama3.1:8b",
+        help="Ollama model to use (default: llama3.1:8b)"
     )
     return parser.parse_args()
 
@@ -95,7 +95,7 @@ def main():
 
     # --- Pre-flight checks ---
     try:
-        check_api_key()
+        check_ollama(args.model)
         check_prompts_exist(agent_names)
     except (EnvironmentError, FileNotFoundError) as e:
         print(f"Error: {e}")

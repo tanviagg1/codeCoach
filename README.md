@@ -17,13 +17,13 @@ Paste any code file into CodeCoach and get back:
 ## Quick Start
 
 ```bash
-# 1. Clone and install
+# 1. Install Ollama from https://ollama.com then pull the model
+ollama pull llama3.1:8b
+
+# 2. Clone and install
 git clone https://github.com/tanviagarwal/codeCoach.git
 cd codeCoach
 pip install -r requirements.txt
-
-# 2. Set your API key
-export ANTHROPIC_API_KEY=your_key_here
 
 # 3. Run on any Python file
 python main.py --file samples/bad_code.py
@@ -108,7 +108,7 @@ All agents share an `AgentContext` object — the state that flows through the p
 
 ## Tech Stack
 
-- **LLM**: Anthropic Claude API (`claude-sonnet-4-6`)
+- **LLM**: Ollama (`llama3.1:8b` — local, no API key needed)
 - **Orchestration**: Sequential pipeline → LangGraph
 - **Memory**: ChromaDB (vector store for past reviews)
 - **API**: FastAPI

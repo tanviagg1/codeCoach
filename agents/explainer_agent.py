@@ -11,10 +11,16 @@ See AGENTS_GUIDE.md for agent conventions.
 See prompts/explainer.md for the prompt template.
 """
 
-import anthropic
+import ollama
 
 from agents.base import BaseAgent
 from agents.context import AgentContext
+
+SYSTEM_PROMPT = (
+    "You are a senior developer who excels at mentoring junior engineers. "
+    "You explain code clearly, using simple language and relatable analogies. "
+    "You avoid jargon unless you explain it immediately after."
+)
 
 
 class ExplainerAgent(BaseAgent):
@@ -28,8 +34,8 @@ class ExplainerAgent(BaseAgent):
     - explanation: a 2-4 paragraph plain-English explanation
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6"):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str = "llama3.1:8b"):
+        self.client = ollama.Client()
         self.model = model
         self.prompt_template = self._load_prompt("explainer.md")
 
@@ -43,31 +49,27 @@ class ExplainerAgent(BaseAgent):
         prompt = prompt.replace("{{language}}", context.language)
         prompt = prompt.replace("{{filename}}", context.filename)
 
-        # 3. Call Claude API
+        # 3. Call Ollama
         # Higher temperature for natural-sounding explanation (not robotic)
         try:
-            response = self.client.messages.create(
+            response = self.client.chat(
                 model=self.model,
-                max_tokens=1024,
-                temperature=0.7,
-                system=(
-                    "You are a senior developer who excels at mentoring junior engineers. "
-                    "You explain code clearly, using simple language and relatable analogies. "
-                    "You avoid jargon unless you explain it immediately after."
-                ),
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                options={"temperature": 0.7},
             )
-            raw = response.content[0].text.strip()
+            raw = response.message.content.strip()
 
             # 4. Write to context (plain text, no parsing needed)
             context.explanation = raw
 
-            # Print a short preview
             preview = raw[:100].replace("\n", " ")
             print(f"  Explanation: {preview}...")
 
-        except anthropic.APIError as e:
-            context.errors.append(f"ExplainerAgent: API error: {e}")
-            print(f"  Warning: API error: {e}")
+        except Exception as e:
+            context.errors.append(f"ExplainerAgent: error: {e}")
+            print(f"  Warning: {e}")
 
         return context

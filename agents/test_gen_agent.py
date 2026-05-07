@@ -11,10 +11,16 @@ See AGENTS_GUIDE.md for agent conventions.
 See prompts/test_gen.md for the prompt template.
 """
 
-import anthropic
+import ollama
 
 from agents.base import BaseAgent
 from agents.context import AgentContext
+
+SYSTEM_PROMPT = (
+    "You are a senior software engineer specializing in test-driven development. "
+    "You write thorough pytest unit tests that cover happy paths, edge cases, "
+    "and error conditions. Your tests are self-contained and runnable."
+)
 
 
 class TestGenAgent(BaseAgent):
@@ -29,8 +35,8 @@ class TestGenAgent(BaseAgent):
     - generated_tests: full pytest file as a string
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6"):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str = "llama3.1:8b"):
+        self.client = ollama.Client()
         self.model = model
         self.prompt_template = self._load_prompt("test_gen.md")
 
@@ -54,22 +60,19 @@ class TestGenAgent(BaseAgent):
         prompt = prompt.replace("{{filename}}", context.filename)
         prompt = prompt.replace("{{issues}}", issues_str)
 
-        # 4. Call Claude API
+        # 4. Call Ollama
         try:
-            response = self.client.messages.create(
+            response = self.client.chat(
                 model=self.model,
-                max_tokens=4096,
-                temperature=0.3,
-                system=(
-                    "You are a senior software engineer specializing in test-driven development. "
-                    "You write thorough pytest unit tests that cover happy paths, edge cases, "
-                    "and error conditions. Your tests are self-contained and runnable."
-                ),
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                options={"temperature": 0.3},
             )
-            raw = response.content[0].text.strip()
+            raw = response.message.content.strip()
 
-            # 5. Extract just the Python code if it's wrapped in a code block
+            # 5. Extract Python code from markdown blocks if present
             if "```python" in raw:
                 raw = raw.split("```python")[1].split("```")[0].strip()
             elif "```" in raw:
@@ -78,12 +81,11 @@ class TestGenAgent(BaseAgent):
             # 6. Write to context
             context.generated_tests = raw
 
-            # Count test functions
             test_count = raw.count("def test_")
             print(f"  Generated {test_count} test function{'s' if test_count != 1 else ''}")
 
-        except anthropic.APIError as e:
-            context.errors.append(f"TestGenAgent: API error: {e}")
-            print(f"  Warning: API error: {e}")
+        except Exception as e:
+            context.errors.append(f"TestGenAgent: error: {e}")
+            print(f"  Warning: {e}")
 
         return context

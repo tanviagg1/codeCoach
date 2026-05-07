@@ -4,9 +4,9 @@
 Multi-agent AI system that reviews code, generates tests, analyzes tech debt, explains code to junior developers, and drafts PR descriptions — all powered by the Claude API.
 
 ## Stack
-- LLM: Anthropic Claude API (claude-sonnet-4-6)
+- LLM: Ollama (llama3.1:8b — local, no API key needed)
 - Agent Framework: Sequential pipeline (Phase 1), LangGraph (Phase 3)
-- RAG Memory: ChromaDB + Anthropic embeddings (Phase 3)
+- RAG Memory: ChromaDB + nomic-embed-text embeddings via Ollama (Phase 4)
 - API: FastAPI
 - Tests: pytest
 - UI: Streamlit (Phase 5)
@@ -36,7 +36,10 @@ codeCoach/
 
 ### Prerequisites
 ```bash
-export ANTHROPIC_API_KEY=your_key_here
+# Install Ollama from https://ollama.com then pull the model
+ollama pull llama3.1:8b
+
+# Install Python deps
 pip install -r requirements.txt
 ```
 
