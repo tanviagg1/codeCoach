@@ -13,3 +13,4 @@ build/
 chroma_db/
 .DS_Store
 output/
+venv/
