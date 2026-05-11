@@ -24,6 +24,7 @@ from agents.pr_summary_agent import PRSummaryAgent
 from agents.alert_agent import AlertAgent
 from hooks.pre_review import validate_inputs, check_ollama, check_prompts_exist
 from hooks.post_review import save_outputs, log_summary
+from memory.vector_store import VectorStore
 from skills.code_parser import detect_language, truncate_code
 from skills.git_tools import read_file
 from skills.formatter import format_full_report
@@ -73,6 +74,10 @@ Examples:
     parser.add_argument(
         "--sequential", action="store_true",
         help="Use the old sequential pipeline instead of LangGraph"
+    )
+    parser.add_argument(
+        "--no-rag", action="store_true",
+        help="Disable RAG injection from past reviews"
     )
     return parser.parse_args()
 
@@ -131,15 +136,31 @@ def main():
     print(f"  Agents:   {', '.join(agent_names)}")
     print(f"  Model:    {args.model}")
 
+    # --- Set up VectorStore for RAG (Phase 4) ---
+    vector_store = None
+    if not args.no_rag:
+        try:
+            vector_store = VectorStore()
+        except Exception as e:
+            print(f"  Warning: VectorStore unavailable ({e}). Running without RAG.")
+
     # --- Build pipeline ---
     if args.sequential or args.agent or args.agents:
         # Single-agent or subset runs use the sequential pipeline
         ordered = [name for name in PIPELINE_ORDER if name in agent_names]
-        agents = [AGENT_REGISTRY[name](model=args.model) for name in ordered]
+        if "review" in ordered and vector_store:
+            agents = [
+                AGENT_REGISTRY[name](model=args.model, vector_store=vector_store)
+                if name == "review"
+                else AGENT_REGISTRY[name](model=args.model)
+                for name in ordered
+            ]
+        else:
+            agents = [AGENT_REGISTRY[name](model=args.model) for name in ordered]
         pipeline = SequentialPipeline(agents)
     else:
         # Full pipeline defaults to LangGraph (parallel + conditional routing)
-        pipeline = LangGraphPipeline(model=args.model)
+        pipeline = LangGraphPipeline(model=args.model, vector_store=vector_store)
 
     # --- Create context ---
     context = AgentContext(
@@ -151,6 +172,13 @@ def main():
 
     # --- Run ---
     context = pipeline.run(context)
+
+    # --- Store review in ChromaDB (Phase 4) ---
+    if vector_store and context.review_summary:
+        try:
+            vector_store.store_review(context)
+        except Exception as e:
+            print(f"  Warning: could not store review: {e}")
 
     # --- Output ---
     print("\n" + format_full_report(context))
