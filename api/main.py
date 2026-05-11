@@ -22,6 +22,7 @@ from agents.explainer_agent import ExplainerAgent
 from agents.tech_debt_agent import TechDebtAgent
 from agents.pr_summary_agent import PRSummaryAgent
 from skills.code_parser import detect_language, truncate_code, estimate_tokens
+from memory.vector_store import VectorStore
 
 
 app = FastAPI(
@@ -29,6 +30,18 @@ app = FastAPI(
     description="Multi-agent AI code review system powered by Claude",
     version="1.0.0",
 )
+
+# Shared VectorStore instance — initialized once at startup
+_vector_store: VectorStore | None = None
+
+def get_vector_store() -> VectorStore | None:
+    global _vector_store
+    if _vector_store is None:
+        try:
+            _vector_store = VectorStore()
+        except Exception:
+            pass
+    return _vector_store
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -131,12 +144,21 @@ def run_full_review(request: ReviewRequest):
         model=request.model,
     )
 
+    vector_store = get_vector_store()
+
     all_agents_requested = set(request.agents) == {"review", "tests", "explain", "debt", "pr"}
     if request.use_langgraph and all_agents_requested:
-        pipeline = LangGraphPipeline(model=request.model)
+        pipeline = LangGraphPipeline(model=request.model, vector_store=vector_store)
     else:
         pipeline = _build_pipeline(request.agents, request.model)
     context = pipeline.run(context)
+
+    # Store the completed review in ChromaDB
+    if vector_store and context.review_summary:
+        try:
+            vector_store.store_review(context)
+        except Exception:
+            pass
 
     return ReviewResponse(
         filename=context.filename,
@@ -178,12 +200,33 @@ def run_single_agent(request: SingleAgentRequest):
 
 
 @app.get("/history")
-def get_review_history():
+def get_review_history(limit: int = 20):
     """
-    Retrieve past reviews from the vector store.
-    Requires Phase 4 (ChromaDB) to be implemented.
+    Retrieve past reviews stored in ChromaDB, newest first.
+
+    Args:
+        limit: Maximum number of reviews to return (default 20)
     """
-    return {
-        "message": "Review history available in Phase 4 (ChromaDB integration).",
-        "reviews": []
-    }
+    vector_store = get_vector_store()
+    if vector_store is None:
+        return {"total": 0, "reviews": []}
+
+    reviews = vector_store.list_reviews(limit=limit)
+    return {"total": vector_store.count(), "reviews": reviews}
+
+
+@app.get("/history/similar")
+def find_similar_reviews(code: str, top_k: int = 3):
+    """
+    Find past reviews similar to the submitted code snippet.
+
+    Args:
+        code: Code snippet to find similar reviews for
+        top_k: Number of similar reviews to return
+    """
+    vector_store = get_vector_store()
+    if vector_store is None:
+        return {"reviews": []}
+
+    reviews = vector_store.find_similar_reviews(code, top_k=top_k)
+    return {"reviews": reviews}

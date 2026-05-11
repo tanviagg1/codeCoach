@@ -11,6 +11,8 @@ Review the submitted {{language}} code from the file `{{filename}}` for:
 
 Only flag issues that exist in the submitted code. Do not suggest architectural redesigns.
 
+{{past_reviews}}
+
 ## Input
 ```
 {{code}}

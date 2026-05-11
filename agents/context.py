@@ -61,6 +61,12 @@ class AgentContext:
     pr_body: str = ""
 
     # ----------------------------------------------------------------
+    # After VectorStore.store_review (Phase 4)
+    # ----------------------------------------------------------------
+    review_id: str = ""
+    # UUID assigned when this review is stored in ChromaDB
+
+    # ----------------------------------------------------------------
     # Pipeline metadata (filled throughout)
     # ----------------------------------------------------------------
     timings: dict = field(default_factory=dict)

@@ -70,6 +70,7 @@ class PipelineState(TypedDict, total=False):
     filename: str
     language: str
     model: str
+    vector_store: object  # Optional VectorStore for RAG (Phase 4)
 
     # ReviewAgent output
     review_issues: list
@@ -149,7 +150,8 @@ def review_node(state: PipelineState) -> dict:
     # Clear any prior parse errors before retry so they don't accumulate
     ctx.errors = [e for e in ctx.errors if "failed to parse JSON" not in e]
 
-    agent = ReviewAgent(model=state.get("model", "llama3.1:8b"))
+    vector_store = state.get("vector_store")
+    agent = ReviewAgent(model=state.get("model", "llama3.1:8b"), vector_store=vector_store)
     ctx, elapsed = _timed(agent, ctx)
     print(f"  Done in {elapsed}s")
 
@@ -314,10 +316,15 @@ class LangGraphPipeline:
     Usage:
         pipeline = LangGraphPipeline(model="llama3.1:8b")
         context = pipeline.run(context)
+
+    Phase 4:
+        store = VectorStore()
+        pipeline = LangGraphPipeline(model="llama3.1:8b", vector_store=store)
     """
 
-    def __init__(self, model: str = "llama3.1:8b"):
+    def __init__(self, model: str = "llama3.1:8b", vector_store=None):
         self.model = model
+        self.vector_store = vector_store
         self.graph = build_graph()
 
     def run(self, context: AgentContext) -> AgentContext:
@@ -329,6 +336,7 @@ class LangGraphPipeline:
             "filename": context.filename,
             "language": context.language,
             "model": self.model,
+            "vector_store": self.vector_store,
             "review_issues": [],
             "review_summary": "",
             "generated_tests": "",
