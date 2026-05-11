@@ -49,6 +49,12 @@ class AgentContext:
     # Each hotspot: {"line": int, "description": str, "severity": str}
 
     # ----------------------------------------------------------------
+    # After TechDebtAgent (conditional — only if debt_score > 80)
+    # ----------------------------------------------------------------
+    alert_message: str = ""
+    # Set by AlertAgent when debt is CRITICAL (> 80)
+
+    # ----------------------------------------------------------------
     # After PRSummaryAgent
     # ----------------------------------------------------------------
     pr_title: str = ""

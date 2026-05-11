@@ -15,11 +15,13 @@ import sys
 
 from agents.context import AgentContext
 from agents.pipeline import SequentialPipeline
+from agents.langgraph_pipeline import LangGraphPipeline
 from agents.review_agent import ReviewAgent
 from agents.test_gen_agent import TestGenAgent
 from agents.explainer_agent import ExplainerAgent
 from agents.tech_debt_agent import TechDebtAgent
 from agents.pr_summary_agent import PRSummaryAgent
+from agents.alert_agent import AlertAgent
 from hooks.pre_review import validate_inputs, check_ollama, check_prompts_exist
 from hooks.post_review import save_outputs, log_summary
 from skills.code_parser import detect_language, truncate_code
@@ -67,6 +69,10 @@ Examples:
     parser.add_argument(
         "--model", default="llama3.1:8b",
         help="Ollama model to use (default: llama3.1:8b)"
+    )
+    parser.add_argument(
+        "--sequential", action="store_true",
+        help="Use the old sequential pipeline instead of LangGraph"
     )
     return parser.parse_args()
 
@@ -126,9 +132,14 @@ def main():
     print(f"  Model:    {args.model}")
 
     # --- Build pipeline ---
-    ordered = [name for name in PIPELINE_ORDER if name in agent_names]
-    agents = [AGENT_REGISTRY[name](model=args.model) for name in ordered]
-    pipeline = SequentialPipeline(agents)
+    if args.sequential or args.agent or args.agents:
+        # Single-agent or subset runs use the sequential pipeline
+        ordered = [name for name in PIPELINE_ORDER if name in agent_names]
+        agents = [AGENT_REGISTRY[name](model=args.model) for name in ordered]
+        pipeline = SequentialPipeline(agents)
+    else:
+        # Full pipeline defaults to LangGraph (parallel + conditional routing)
+        pipeline = LangGraphPipeline(model=args.model)
 
     # --- Create context ---
     context = AgentContext(
