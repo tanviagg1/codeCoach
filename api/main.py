@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from typing import Optional
 from agents.context import AgentContext
 from agents.pipeline import SequentialPipeline
+from agents.langgraph_pipeline import LangGraphPipeline
 from agents.review_agent import ReviewAgent
 from agents.test_gen_agent import TestGenAgent
 from agents.explainer_agent import ExplainerAgent
@@ -38,6 +39,7 @@ class ReviewRequest(BaseModel):
     filename: str = "unknown.py"
     agents: list[str] = ["review", "tests", "explain", "debt", "pr"]
     model: str = "llama3.1:8b"
+    use_langgraph: bool = True
 
 
 class SingleAgentRequest(BaseModel):
@@ -56,6 +58,7 @@ class ReviewResponse(BaseModel):
     explanation: str
     debt_score: Optional[int]
     debt_hotspots: list
+    alert_message: str
     pr_title: str
     pr_body: str
     timings: dict
@@ -128,7 +131,11 @@ def run_full_review(request: ReviewRequest):
         model=request.model,
     )
 
-    pipeline = _build_pipeline(request.agents, request.model)
+    all_agents_requested = set(request.agents) == {"review", "tests", "explain", "debt", "pr"}
+    if request.use_langgraph and all_agents_requested:
+        pipeline = LangGraphPipeline(model=request.model)
+    else:
+        pipeline = _build_pipeline(request.agents, request.model)
     context = pipeline.run(context)
 
     return ReviewResponse(
@@ -140,6 +147,7 @@ def run_full_review(request: ReviewRequest):
         explanation=context.explanation,
         debt_score=context.debt_score,
         debt_hotspots=context.debt_hotspots,
+        alert_message=context.alert_message,
         pr_title=context.pr_title,
         pr_body=context.pr_body,
         timings=context.timings,
